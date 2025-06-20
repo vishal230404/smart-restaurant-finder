@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MapPin, Navigation, Loader2, AlertCircle, Search, Heart, Clock, Star, ChevronDown } from 'lucide-react';
 import { fetchNearbyRestaurants } from '../api/nearby';
 import { getCurrentLocation } from '../services/location';
 import RestaurantCard from '../components/RestaurantCard';
 import RestaurantDetailModal from '../components/RestaurantDetailModal';
-import { fetchCountries, fetchCitiesByCountry, fetchCityRestaurants } from '../api/cities';
+import { fetchCountries, fetchCitiesByCountry } from '../api/cities';
+import headerImage from '../assets/headerImage.jpg';
 
 const Home = () => {
+  const navigate = useNavigate();
   const [nearby, setNearby] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -19,11 +22,8 @@ const Home = () => {
   // States for popular cities
   const [countries, setCountries] = useState([]);
   const [popularCities, setPopularCities] = useState([]);
-  const [selectedCountry, setSelectedCountry] = useState('');
-  const [selectedCity, setSelectedCity] = useState('');
   const [loadingCountries, setLoadingCountries] = useState(false);
   const [loadingPopularCities, setLoadingPopularCities] = useState(false);
-  const [loadingCityRestaurants, setLoadingCityRestaurants] = useState(false);
   const [defaultCountry, setDefaultCountry] = useState('India');
 
   const fetchRestaurants = async ({ lat, lon }) => {
@@ -101,29 +101,12 @@ const Home = () => {
   // Handle country selection for popular cities
   const handlePopularCountryChange = async (countryName) => {
     setDefaultCountry(countryName);
-    setSelectedCountry(countryName);
     await loadPopularCities(countryName);
   };
 
-  // Handle popular city selection and fetch restaurants
-  const handlePopularCityClick = async (cityName, countryName) => {
-    try {
-      setSelectedCountry(countryName);
-      setSelectedCity(cityName);
-      setLoadingCityRestaurants(true);
-      setLoading(true);
-      
-      const restaurantsData = await fetchCityRestaurants(cityName, 20);
-      setNearby(restaurantsData);
-      setError('');
-    } catch (err) {
-      console.error('❌ Failed to load city restaurants:', err);
-      setError('Failed to load restaurants for selected city.');
-      setNearby([]);
-    } finally {
-      setLoadingCityRestaurants(false);
-      setLoading(false);
-    }
+  // Navigate to city page instead of loading restaurants on same page
+  const handlePopularCityClick = (cityName, countryName) => {
+    navigate(`/city/${encodeURIComponent(cityName)}/${encodeURIComponent(countryName)}`);
   };
 
   const handleViewDetails = (restaurant) => {
@@ -152,29 +135,43 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100">
-      {/* Hero Section */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-700 text-white">
-        <div className="absolute inset-0 bg-black/20"></div>
-        <div className="relative max-w-7xl mx-auto px-4 py-16">
+      {/* Hero Section with Header Image */}
+      {/* Responsive Header */}
+<div className="relative overflow-hidden text-white">
+  <div 
+    className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+    style={{
+      backgroundImage: `url(${headerImage})`,
+      height: 'clamp(400px, 50vh, 600px)', // Responsive height
+      width: '100%'
+    }}
+  >
+  
+  <div className="relative h-[clamp(300px,50vh,600px)] flex items-center">
+    {/* Content */}
+  </div>
+  </div>
+        
+        {/* Dark Overlay for better text readability */}
+        <div className="absolute inset-0 bg-black/50"></div>
+        
+        <div className="relative max-w-7xl mx-auto px-4 py-16 z-10">
           <div className="text-center">
             <div className="inline-flex items-center justify-center w-24 h-24 bg-white/20 backdrop-blur-lg rounded-full mb-6">
               <MapPin className="w-12 h-12 text-white" />
             </div>
-            <h1 className="text-5xl md:text-6xl font-bold mb-4">
+            <h1 className="text-5xl md:text-6xl font-bold mb-4 drop-shadow-lg">
               Discover Amazing
               <span className="block bg-gradient-to-r from-yellow-300 to-orange-400 bg-clip-text text-transparent">
                 Restaurants
               </span>
             </h1>
-            <p className="text-xl md:text-2xl text-blue-100 max-w-3xl mx-auto leading-relaxed">
-              Find the perfect dining experience right around the corner with our intelligent location-based recommendations
-            </p>
           </div>
         </div>
         
         {/* Decorative elements */}
         <div className="absolute top-20 left-10 w-20 h-20 bg-white/10 rounded-full blur-xl"></div>
-        <div className="absolute bottom-20 right-10 w-32 h-32 bg-purple-300/20 rounded-full blur-2xl"></div>
+        <div className="absolute bottom-20 right-10 w-32 h-32 bg-orange-300/20 rounded-full blur-2xl"></div>
         <div className="absolute top-1/2 left-1/3 w-16 h-16 bg-yellow-300/20 rounded-full blur-lg"></div>
       </div>
 
@@ -278,19 +275,11 @@ const Home = () => {
                 ))}
               </div>
             )}
-
-            {/* Loading indicator for city restaurants */}
-            {loadingCityRestaurants && (
-              <div className="flex items-center justify-center py-6">
-                <Loader2 className="w-8 h-8 text-orange-500 animate-spin mr-3" />
-                <span className="text-gray-700 font-medium">Loading restaurants...</span>
-              </div>
-            )}
           </div>
         )}
 
-        {/* Results Section */}
-        {!loading && !error && nearby.length > 0 && (
+        {/* Results Section - Only for location-based restaurants */}
+        {!loading && !error && !locationDenied && nearby.length > 0 && (
           <div className="animate-in slide-in-from-bottom duration-500">
             {/* Stats Bar */}
             <div className="bg-white/80 backdrop-blur-lg rounded-2xl shadow-lg border border-white/20 p-6 mb-8">
@@ -303,9 +292,7 @@ const Home = () => {
                     <h3 className="text-lg font-bold text-gray-800">
                       Found {nearby.length} Restaurant{nearby.length !== 1 ? 's' : ''}
                     </h3>
-                    <p className="text-gray-600">
-                      {selectedCity ? `In ${selectedCity}, ${selectedCountry}` : 'Within your area'}
-                    </p>
+                    <p className="text-gray-600">Within your area</p>
                   </div>
                 </div>
                 
@@ -362,30 +349,6 @@ const Home = () => {
                   Explore More Restaurants
                 </button>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {!loading && !error && nearby.length === 0 && selectedCity && (
-          <div className="max-w-2xl mx-auto">
-            <div className="bg-white/80 backdrop-blur-lg rounded-3xl shadow-2xl border border-white/20 p-12 text-center">
-              <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Search className="w-12 h-12 text-gray-400" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-800 mb-4">No Restaurants Found</h3>
-              <p className="text-gray-600 text-lg mb-8">
-                We couldn't find any restaurants in {selectedCity}, {selectedCountry}. Try selecting a different city.
-              </p>
-              <button 
-                onClick={() => {
-                  setSelectedCity('');
-                  setNearby([]);
-                }}
-                className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-8 py-3 rounded-2xl font-semibold hover:shadow-lg transform hover:scale-105 transition-all duration-200"
-              >
-                Choose Different City
-              </button>
             </div>
           </div>
         )}
